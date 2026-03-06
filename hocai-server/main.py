@@ -2,6 +2,7 @@
 HOCAI Server — FastAPI Application & Routes
 Main entry point for the HOCAI knowledge tracking system.
 """
+import os
 import json
 from pathlib import Path
 from datetime import datetime, timezone
@@ -35,6 +36,8 @@ from graph import (
 )
 from synthesizer import sha256_hash, synthesize_lesson, maybe_update_lesson, call_ai_api
 from config import HOCAI_PORT, HOCAI_HOST, MAX_RELATED_LESSONS
+from mcp_service import get_mcp_tools, execute_mcp_tool
+
 
 
 @asynccontextmanager
@@ -498,19 +501,34 @@ async def get_settings():
         "api_url": config.AI_API_URL,
         "api_key": config.AI_API_KEY,
         "model": config.AI_MODEL,
+        "brightdata_mcp_url": os.environ.get("BRIGHTDATA_MCP_URL", ""),
+        "brightdata_api_key": os.environ.get("BRIGHTDATA_API_KEY", ""),
     }
 
+class SettingsRequestWithMCP(SettingsRequest):
+    brightdata_mcp_url: str | None = None
+    brightdata_api_key: str | None = None
+
 @app.post("/api/settings")
-async def update_settings(req: SettingsRequest):
+async def update_settings(req: SettingsRequestWithMCP):
     # Update in-memory
     config.AI_API_URL = req.api_url
     config.AI_API_KEY = req.api_key
     config.AI_MODEL = req.model
+    
+    if req.brightdata_mcp_url is not None:
+        os.environ["BRIGHTDATA_MCP_URL"] = req.brightdata_mcp_url
+    if req.brightdata_api_key is not None:
+        os.environ["BRIGHTDATA_API_KEY"] = req.brightdata_api_key
 
     # Update .env file
     update_env_file("AI_API_URL", req.api_url)
     update_env_file("AI_API_KEY", req.api_key)
     update_env_file("AI_MODEL", req.model)
+    if req.brightdata_mcp_url is not None:
+        update_env_file("BRIGHTDATA_MCP_URL", req.brightdata_mcp_url)
+    if req.brightdata_api_key is not None:
+        update_env_file("BRIGHTDATA_API_KEY", req.brightdata_api_key)
 
     return {"status": "success", "message": "Settings updated"}
 
@@ -534,22 +552,119 @@ async def chat_with_ai(req: ChatRequest):
     }
 
     async def event_generator():
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                print(f"[HOCAI] Sending streaming chat request to {config.AI_API_URL}/chat/completions")
-                async with client.stream(
-                    "POST",
-                    f"{config.AI_API_URL}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                ) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if line:
-                            yield f"{line}\n"
-        except Exception as e:
-            print(f"[HOCAI] Chat streaming error: {e}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        MAX_TOOL_CALLS = 6
+        tool_call_count = 0
+        messages = [msg.dict() for msg in req.messages]
+
+        while True:
+            # Refresh payload
+            payload = {
+                "model": config.AI_MODEL,
+                "messages": messages,
+                "temperature": 0.7,
+                "stream": True
+            }
+            
+            # Fetch tools
+            tools = await get_mcp_tools()
+            if tools and tool_call_count < MAX_TOOL_CALLS:
+                payload["tools"] = tools
+
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with client.stream(
+                        "POST",
+                        f"{config.AI_API_URL}/chat/completions",
+                        json=payload,
+                        headers=headers,
+                    ) as response:
+                        response.raise_for_status()
+                        
+                        is_tool_call = False
+                        tool_calls_buffer = {}
+
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
+                            
+                            if line.startswith("data: "):
+                                data_str = line[6:].strip()
+                                if data_str == "[DONE]":
+                                    continue
+                                
+                                try:
+                                    data = json.loads(data_str)
+                                    if "choices" in data and len(data["choices"]) > 0:
+                                        delta = data["choices"][0].get("delta", {})
+                                        
+                                        # Detect tool calls
+                                        if "tool_calls" in delta:
+                                            is_tool_call = True
+                                            for tc in delta["tool_calls"]:
+                                                idx = tc["index"]
+                                                if idx not in tool_calls_buffer:
+                                                    tool_calls_buffer[idx] = {
+                                                        "id": tc.get("id", ""), 
+                                                        "type": "function", 
+                                                        "function": {"name": "", "arguments": ""}
+                                                    }
+                                                
+                                                # merge name
+                                                if "function" in tc and "name" in tc["function"] and tc["function"]["name"]:
+                                                    tool_calls_buffer[idx]["function"]["name"] += tc["function"]["name"]
+                                                # merge arguments
+                                                if "function" in tc and "arguments" in tc["function"] and tc["function"]["arguments"]:
+                                                    tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
+                                        
+                                        # Yield text if not tool call
+                                        elif not is_tool_call and "content" in delta and delta["content"]:
+                                            yield f"{line}\n"
+                                except Exception as e:
+                                    pass
+
+            except Exception as e:
+                print(f"[HOCAI] Chat streaming error: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                break
+                
+            if is_tool_call:
+                # Add the assistant message with tool calls
+                tool_calls_list = [v for k,v in sorted(tool_calls_buffer.items())]
+                messages.append({
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": tool_calls_list
+                })
+                
+                # Execute tools sequentially
+                for tc in tool_calls_list:
+                    t_name = tc["function"]["name"]
+                    t_args_str = tc["function"]["arguments"]
+                    try:
+                        t_args = json.loads(t_args_str)
+                    except:
+                        t_args = {}
+                    
+                    # Notify frontend
+                    loading_msg = f"\n\n_[HOCAI] Đang dùng công cụ '{t_name}' qua BrightData..._\n\n"
+                    yield f"data: {json.dumps({'choices': [{'delta': {'content': loading_msg}}]})}\n\n"
+                    
+                    # Execute via MCP
+                    t_result = await execute_mcp_tool(t_name, t_args)
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "name": t_name,
+                        "content": str(t_result)
+                    })
+                
+                tool_call_count += 1
+                # Loop continues to send tools results back to AI
+            else:
+                # Streaming finished normally
+                yield "data: [DONE]\n\n"
+                break
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

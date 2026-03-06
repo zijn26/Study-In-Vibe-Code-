@@ -711,6 +711,15 @@
                     <label>AI MODEL</label>
                     <input type="text" class="form-control" id="settingModel" placeholder="gpt-3.5-turbo">
                 </div>
+                <div class="form-group">
+                    <label>BRIGHTDATA MCP URL (Optional)</label>
+                    <input type="text" class="form-control" id="settingMcpUrl"
+                        placeholder="https://mcp.brightdata.com/sse?token=...&groups=advanced_scraping">
+                </div>
+                <div class="form-group">
+                    <label>BRIGHTDATA API KEY (Optional)</label>
+                    <input type="password" class="form-control" id="settingBrightDataApi" placeholder="2dceb1aa0...">
+                </div>
                 <div>
                     <button class="btn-save" onclick="saveSettings()">Save Settings</button>
                     <span class="save-status" id="saveStatus">Saved successfully!</span>
@@ -875,6 +884,8 @@
                 document.getElementById('settingApiUrl').value = data.api_url || '';
                 document.getElementById('settingApiKey').value = data.api_key || '';
                 document.getElementById('settingModel').value = data.model || '';
+                document.getElementById('settingMcpUrl').value = data.brightdata_mcp_url || '';
+                document.getElementById('settingBrightDataApi').value = data.brightdata_api_key || '';
             } catch (e) {
                 console.error('Failed to load settings', e);
             }
@@ -885,6 +896,8 @@
                 api_url: document.getElementById('settingApiUrl').value,
                 api_key: document.getElementById('settingApiKey').value,
                 model: document.getElementById('settingModel').value,
+                brightdata_mcp_url: document.getElementById('settingMcpUrl').value || null,
+                brightdata_api_key: document.getElementById('settingBrightDataApi').value || null,
             };
             try {
                 await fetch(API + '/api/settings', {
