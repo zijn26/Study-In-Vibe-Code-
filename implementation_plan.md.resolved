@@ -1,0 +1,171 @@
+# HOCAI System v2.1 — Implementation Plan (Updated)
+
+> **Ngày:** 2026-03-06 | Dựa trên plan gốc + câu trả lời user
+
+---
+
+## Tổng quan thay đổi so với plan gốc
+
+| Quyết định | Plan gốc | Cập nhật |
+|---|---|---|
+| Database | PostgreSQL | **SQLite** (8GB RAM, i5-9K, 30GB free → nhẹ nhất) |
+| AI API | Chưa rõ | **User đã có sẵn**, OpenAI-compatible format |
+| Concept scoping | `UNIQUE(name, project_name)` — tách riêng | **Shared** — concepts dùng chung, chỉ ghi `project_name` vào marks để tracking nguồn |
+| Lesson cũ + data mới | Chưa rõ logic | Bổ sung **nếu đáng giá** — không bổ sung bừa |
+| Lesson template | Tự do | **Template chuẩn**, mỗi bài = 1 chủ đề tổng quan |
+| Skill cũ | File-based, Agent tự xử lý | **Nâng cấp** → gọi HTTP API tới HOCAI Server |
+| Startup | Auto | **Thủ công** (.bat/.ps1) |
+| Deploy | Chưa rõ | **localhost:8000** |
+
+---
+
+## Proposed Changes
+
+### HOCAI Server
+
+#### [NEW] [main.py](file:///d:/HOCAISYSTEM/hocai-server/main.py)
+FastAPI app + all API routes: `/api/mark`, `/api/search-lessons`, `/api/concepts`, `/api/lessons`, `/api/stats`, `/api/synthesize/{id}`
+
+#### [NEW] [database.py](file:///d:/HOCAISYSTEM/hocai-server/database.py)
+SQLAlchemy setup for **SQLite** (`hocai.db` trong cùng thư mục). Async-compatible.
+
+#### [NEW] [models.py](file:///d:/HOCAISYSTEM/hocai-server/models.py)
+4 ORM models — schema thay đổi so với plan gốc:
+
+```sql
+-- Concepts: KHÔNG còn UNIQUE(name, project_name)
+-- Thay bằng UNIQUE(name) → shared giữa tất cả projects
+CREATE TABLE concepts (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              VARCHAR(200) NOT NULL UNIQUE,  -- ← SHARED
+    keywords          TEXT,          -- JSON array (SQLite không có array)
+    domain            VARCHAR(100),
+    status            VARCHAR(20) DEFAULT 'GLIMPSED',
+    accumulated_score FLOAT DEFAULT 0,
+    first_seen        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    mark_count        INT DEFAULT 0
+);
+
+-- Marks: ghi project_name ở đây để biết kiến thức đến từ project nào
+CREATE TABLE concept_marks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    concept_id      INT REFERENCES concepts(id) ON DELETE CASCADE,
+    project_name    VARCHAR(200) NOT NULL DEFAULT 'global',  -- ← tracking source
+    timestamp       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    question_type   VARCHAR(20),
+    base_score      FLOAT,
+    final_score     FLOAT,
+    context_snippet TEXT
+);
+
+-- Edges: quan hệ giữa concepts (giữ nguyên)
+CREATE TABLE concept_edges (
+    concept_a     INT REFERENCES concepts(id),
+    concept_b     INT REFERENCES concepts(id),
+    relation_type VARCHAR(20),
+    strength      FLOAT DEFAULT 1.0,
+    PRIMARY KEY (concept_a, concept_b)
+);
+
+-- Lessons: bài học — mỗi bài = 1 chủ đề tổng quan, KHÔNG gắn project
+CREATE TABLE lessons (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    concept_id      INT REFERENCES concepts(id) UNIQUE,  -- 1 concept = 1 lesson
+    lesson_name     VARCHAR(300),
+    content         TEXT NOT NULL,
+    synthesized_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    version         INT DEFAULT 1,
+    context_hashes  TEXT  -- JSON array of sha256 hashes
+);
+```
+
+#### [NEW] [scoring.py](file:///d:/HOCAISYSTEM/hocai-server/scoring.py)
+Scoring engine: `base_score × multiplier × novelty × time_decay`. Giữ nguyên logic plan gốc.
+
+#### [NEW] [graph.py](file:///d:/HOCAISYSTEM/hocai-server/graph.py)
+Graph propagation: upsert edges + lan truyền điểm sang neighbors.
+
+#### [NEW] [synthesizer.py](file:///d:/HOCAISYSTEM/hocai-server/synthesizer.py)
+Gọi AI API (OpenAI-compatible format) để:
+- `/synthesize`: tổng hợp bài học mới khi READY
+- `/update-lesson`: bổ sung nếu có kiến thức mới **đáng giá**
+
+> [!IMPORTANT]
+> **Lesson template chuẩn**: Mỗi bài = 1 chủ đề tổng quan (VD: "PWM là gì, nguyên lý, code multi-framework"). KHÔNG gộp nhiều chủ đề. AI API sẽ nhận prompt template yêu cầu tạo bài theo format chuẩn.
+
+#### [NEW] [schemas.py](file:///d:/HOCAISYSTEM/hocai-server/schemas.py)
+Pydantic models cho request/response.
+
+#### [NEW] [config.py](file:///d:/HOCAISYSTEM/hocai-server/config.py)
+Config: `DATABASE_URL`, `AI_API_URL`, `AI_API_KEY`, `HOCAI_PORT`, thresholds.
+
+#### [NEW] [requirements.txt](file:///d:/HOCAISYSTEM/hocai-server/requirements.txt)
+Dependencies: `fastapi`, `uvicorn`, `sqlalchemy`, `pydantic`, `httpx`, `python-dotenv`.
+
+#### [NEW] [start_hocai.bat](file:///d:/HOCAISYSTEM/hocai-server/start_hocai.bat)
+Script khởi động thủ công.
+
+---
+
+### Antigravity Skill (Giai đoạn 3)
+
+#### [MODIFY] [SKILL.md](file:///C:/Users/Admin/.gemini/antigravity/skills/smart-knowledge-system/SKILL.md)
+Nâng cấp hoàn toàn:
+- Bỏ logic file-based cũ (không còn ghi file [.md](file:///C:/Users/Admin/.gemini/antigravity/skills/smart-knowledge-system/SKILL.md)/`.txt`)
+- Thêm logic: extraction → POST `/api/mark`
+- Thêm logic: nhận câu hỏi → POST `/api/search-lessons`
+- Hiển thị reminder từ response
+- Agent **tự động** gọi API khi làm việc
+
+---
+
+## Logic bổ sung bài học (LEARNED + context mới)
+
+> [!IMPORTANT]
+> User yêu cầu: chỉ bổ sung khi **đáng giá**, không bổ sung bừa.
+
+Tiêu chí "đáng bổ sung":
+1. Context snippet mới có hash khác tất cả hashes đã lưu
+2. Nội dung mới mang **góc nhìn/framework/use case mới** chưa có trong bài hiện tại
+3. AI API quyết định cuối cùng: prompt sẽ yêu cầu AI đánh giá "nội dung mới này có bổ sung giá trị thực sự không?" → trả `should_update: true/false`
+
+---
+
+## Kiến thức tổng quan (Luật "Đi Lên Gốc" — giữ nguyên)
+
+Ví dụ nhắc lại:
+- ❌ "Cách điều khiển motor bằng PWM" → quá nhỏ
+- ✅ "PWM là gì, cách hoạt động, code trên các framework" → tổng quan
+
+---
+
+## Verification Plan
+
+### Automated Tests
+1. **Server startup test**: `python -m pytest tests/ -v` (sẽ tạo test cơ bản cho các endpoint)
+2. **API endpoint test** — chạy thủ công bằng `curl` hoặc browser:
+   ```bash
+   # Start server
+   cd d:\HOCAISYSTEM\hocai-server
+   python main.py
+
+   # Test mark
+   curl -X POST http://localhost:8000/api/mark -H "Content-Type: application/json" -d "{\"timestamp\":\"2026-03-06T12:10:20+07:00\",\"project_name\":\"test\",\"root_concept\":\"PWM\",\"keywords\":[\"pwm\",\"arduino\"],\"domain\":\"embedded\",\"question_type\":\"CONCEPT\",\"base_score\":8.5,\"related_concepts\":[],\"context_snippet\":\"PWM la...\"}"
+
+   # Test search
+   curl -X POST http://localhost:8000/api/search-lessons -H "Content-Type: application/json" -d "{\"keywords\":[\"pwm\"],\"question\":\"PWM la gi?\",\"limit\":5}"
+
+   # Test concepts list
+   curl http://localhost:8000/api/concepts
+
+   # Test stats
+   curl http://localhost:8000/api/stats
+   ```
+
+### Manual Verification
+1. Khởi động server → gọi `POST /api/mark` nhiều lần → kiểm tra score tăng đúng
+2. Khi score > 70 → kiểm tra concept chuyển sang READY
+3. Kiểm tra SQLite file `hocai.db` tồn tại và có data
+4. **User test**: Sau khi xong Giai đoạn 3, user mở IDE, hỏi câu hỏi kỹ thuật → kiểm tra agent tự gọi API và hiển thị reminder

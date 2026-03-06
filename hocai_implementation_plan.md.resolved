@@ -1,0 +1,641 @@
+# 📋 HOCAI System v2.1 — Kế hoạch Triển khai Đầy đủ
+
+> **Phiên bản:** 2.1 | **Ngày:** 2026-03-06  
+> Hệ thống học kiến thức tự động chạy song song với IDE.
+
+---
+
+## Tổng quan kiến trúc
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    ANTIGRAVITY (IDE Agent)           │
+│  1. Trả lời câu hỏi người dùng bình thường          │
+│  2. Trích xuất keywords + chấm điểm                 │
+│  3. POST /api/mark → HOCAI Server                   │
+│  4. Nhận response → hiển thị reminder nếu có        │
+└───────────────────────┬─────────────────────────────┘
+                        │ HTTP JSON
+                        ▼
+┌─────────────────────────────────────────────────────┐
+│                    HOCAI SERVER                      │
+│  - Nhận marks → ghi DB                              │
+│  - Tính điểm + lan truyền graph                     │
+│  - Khi READY → gọi AI API tổng hợp bài học          │
+│  - Khi LEARNED + có data mới → gọi AI API update    │
+│  - Trả về related lessons cho Antigravity           │
+└───────────────────────┬─────────────────────────────┘
+                        │
+               ┌────────┴────────┐
+               ▼                 ▼
+         PostgreSQL DB      AI API (server bạn)
+         (4 tables)         /synthesize, /update-lesson
+```
+
+---
+
+## PHẦN 1 — Phía ANTIGRAVITY
+
+### 1.1 Khi nào Antigravity kích hoạt?
+
+Sau **mỗi lần hoàn thành câu trả lời** cho người dùng (không phân biệt loại câu hỏi).
+
+### 1.2 Trích xuất thông tin (Extraction)
+
+Antigravity tự phân tích cuộc hội thoại vừa xong và xác định:
+
+| Trường | Mô tả | Ví dụ |
+|---|---|---|
+| `root_concept` | Khái niệm tổng quan (Luật "Đi Lên Gốc") | `"Async/Await & Promise"` |
+| `keywords` | Từ khóa kỹ thuật xuất hiện | `["async", "await", "Promise"]` |
+| `domain` | Lĩnh vực kỹ thuật | `"javascript"` |
+| `question_type` | Loại câu hỏi (xem 1.3) | `"CONCEPT"` |
+| `base_score` | Điểm độ sâu câu trả lời (xem 1.4) | `8.5` |
+| `related_concepts` | Concepts liên quan + mức độ | `[{name, relation}]` |
+| `context_snippet` | Đoạn chính trong câu trả lời | `"async/await là..."` |
+
+#### Luật "Đi Lên Gốc" — tìm root_concept
+
+```
+Bước A: Xác định topic câu hỏi
+Bước B: Liệt kê thuật ngữ kỹ thuật xuất hiện trong trả lời
+Bước C: Lọc — thuật ngữ nào đang được GIẢI THÍCH (gốc)?
+         Cái nào chỉ được DÙNG (ứng dụng) → bỏ qua
+
+Ví dụ: "điều chỉnh tốc độ motor bằng Arduino"
+  → PWM được giải thích     → root_concept ✅
+  → analogWrite() chỉ được dùng → không phải root
+```
+
+Tối đa **1–3 root concepts** mỗi cuộc hội thoại.  
+Nếu nhiều hơn → chỉ lấy concept được giải thích nhiều nhất.
+
+---
+
+### 1.3 Phân loại câu hỏi (Question Type)
+
+| Type | Pattern nhận biết | Multiplier |
+|---|---|---|
+| `CONCEPT` | "X là gì?", "giải thích X", "X có nghĩa là" | ×1.5 |
+| `COMPARE` | "X vs Y", "khác nhau thế nào", "so sánh X Y" | ×1.2 |
+| `HOWTO` | "làm thế nào", "code X bằng Y", "cách dùng X" | ×1.0 |
+| `DEBUG` | "tại sao lỗi", "fix X", "lỗi X có nghĩa gì" | ×0.8 |
+| `CONFIRM` | "X có phải Y không", "đúng không", "X là Y à?" | ×0.6 |
+
+---
+
+### 1.4 Chấm điểm Base Score
+
+| Dấu hiệu trong câu trả lời AI | Base Score |
+|---|---|
+| Định nghĩa đầy đủ + cơ chế hoạt động | 8–10 |
+| Giải thích cơ chế (how it works) | 6–8 |
+| So sánh / phân biệt hai khái niệm | 5–7 |
+| Code mẫu có comment giải thích | 4–6 |
+| Ví dụ minh họa đơn giản | 3–5 |
+| Xác nhận ngắn, trả lời có/không | 1–3 |
+
+---
+
+### 1.5 Payload gửi đến HOCAI
+
+Antigravity tự động lấy **tên project** từ workspace đang mở (thư mục gốc của IDE).
+
+```json
+POST http://localhost:8000/api/mark
+Content-Type: application/json
+
+{
+  "timestamp": "2026-03-06T12:10:20+07:00",
+  "project_name": "toolcurrsorResetFreeTrial",
+  "root_concept": "Async/Await & Promise",
+  "keywords": ["async", "await", "Promise", "event loop"],
+  "domain": "javascript",
+  "question_type": "CONCEPT",
+  "base_score": 8.5,
+  "related_concepts": [
+    { "name": "Event Loop",    "relation": "DIRECT"   },
+    { "name": "Callback Hell", "relation": "RELATED"  }
+  ],
+  "context_snippet": "async/await là cú pháp sugar trên Promise, giúp..."
+}
+```
+
+> `project_name` = tên thư mục workspace đang mở trong IDE (VD: `d:\toolcurrsorResetFreeTrial` → lấy `toolcurrsorResetFreeTrial`)
+
+---
+
+### 1.6 Xử lý Response — Hiển thị Reminder
+
+Sau khi gửi POST, Antigravity nhận response và **append vào cuối câu trả lời hiện tại**:
+
+```json
+// Response từ HOCAI
+{
+  "status": "marked",
+  "concept": "Async/Await & Promise",
+  "current_score": 45.3,
+  "concept_status": "CONSOLIDATING",
+  "related_lessons": [
+    {
+      "concept": "Event Loop",
+      "lesson_id": 3,
+      "relation": "DIRECT",
+      "summary": "Event loop là cơ chế JS xử lý bất đồng bộ..."
+    }
+  ]
+}
+```
+
+**Hiển thị cho người dùng (cuối câu trả lời):**
+```
+─────────────────────────────────────
+📚 HOCAI — Bài học liên quan đã có:
+  → [Event Loop] (liên quan trực tiếp)
+    "Event loop là cơ chế JS xử lý bất đồng bộ..."
+─────────────────────────────────────
+```
+
+Nếu `related_lessons` rỗng → không hiển thị gì.  
+Nếu `status = "skipped"` → không hiển thị gì.
+
+---
+
+### 1.7 Reminder API — Tra cứu bài học TRƯỚC khi trả lời
+
+Ngoài việc gửi mark SAU khi trả lời, Antigravity còn có thể **chủ động tra cứu** ngay khi nhận câu hỏi của người dùng.
+
+#### Luồng hoạt động
+
+```
+[Người dùng hỏi câu hỏi]
+        ↓
+[Antigravity trích xuất keywords từ CÂU HỎI (chưa trả lời)]
+        ↓
+POST /api/search-lessons  ← query HOCAI
+        ↓
+[HOCAI kiểm tra DB]
+  ├─ Tìm concepts khớp keywords → status = LEARNED?
+  │    CÓ → trả về danh sách bài học
+  │    KHÔNG → trả về []
+        ↓
+[Antigravity trả lời câu hỏi bình thường]
+        ↓
+[Nếu có bài học liên quan → hiển thị reminder cuối câu trả lời]
+```
+
+#### Payload gửi lên
+
+```json
+POST http://localhost:8000/api/search-lessons
+Content-Type: application/json
+
+{
+  "keywords": ["async", "await", "Promise"],
+  "question": "async/await là gì?",
+  "limit": 5
+}
+```
+
+#### Response từ HOCAI
+
+```json
+// Trường hợp CÓ bài học liên quan
+{
+  "found": true,
+  "lessons": [
+    {
+      "concept":   "Event Loop",
+      "lesson_id": 3,
+      "relation":  "DIRECT",
+      "summary":   "Event loop là cơ chế JS xử lý bất đồng bộ..."
+    }
+  ]
+}
+
+// Trường hợp KHÔNG có bài học nào
+{
+  "found": false,
+  "lessons": []
+}
+```
+
+#### Hiển thị cuối câu trả lời (nếu found = true)
+
+```
+─────────────────────────────────────
+📚 HOCAI — Bài học liên quan đã có:
+  → [Event Loop] (liên quan trực tiếp)
+    "Event loop là cơ chế JS xử lý bất đồng bộ..."
+─────────────────────────────────────
+```
+
+> **Lưu ý:** Nếu `/api/search-lessons` trả về kết quả VÀ `/api/mark` cũng trả về `related_lessons` → gộp lại, loại trùng, chỉ hiển thị một lần.
+
+---
+
+## PHẦN 2 — Phía HOCAI SERVER
+
+### 2.1 Tech Stack
+
+| Thành phần | Lựa chọn |
+|---|---|
+| Language | Python 3.11+ |
+| Web framework | FastAPI |
+| Database | PostgreSQL (hoặc SQLite để bắt đầu nhẹ) |
+| Background jobs | FastAPI `BackgroundTasks` |
+| ORM | SQLAlchemy 2.0 |
+
+---
+
+### 2.2 Database Schema (PostgreSQL)
+
+```sql
+-- Concepts: lưu dạng keyword, có project context
+CREATE TABLE concepts (
+    id                SERIAL PRIMARY KEY,
+    name              VARCHAR(200) NOT NULL,
+    project_name      VARCHAR(200) NOT NULL DEFAULT 'global',
+    keywords          TEXT[],
+    domain            VARCHAR(100),
+    status            VARCHAR(20) DEFAULT 'GLIMPSED',
+    accumulated_score FLOAT DEFAULT 0,
+    first_seen        TIMESTAMP DEFAULT NOW(),
+    last_seen         TIMESTAMP DEFAULT NOW(),
+    mark_count        INT DEFAULT 0,
+    UNIQUE (name, project_name)   -- cùng tên concept nhưng khác project = khác nhau
+);
+
+-- Marks: log từng lần ghi nhận
+CREATE TABLE concept_marks (
+    id              SERIAL PRIMARY KEY,
+    concept_id      INT REFERENCES concepts(id) ON DELETE CASCADE,
+    timestamp       TIMESTAMP DEFAULT NOW(),
+    question_type   VARCHAR(20),
+    base_score      FLOAT,
+    final_score     FLOAT,
+    context_snippet TEXT
+);
+
+-- Edges: quan hệ giữa các concepts
+CREATE TABLE concept_edges (
+    concept_a     INT REFERENCES concepts(id),
+    concept_b     INT REFERENCES concepts(id),
+    relation_type VARCHAR(20),
+    strength      FLOAT DEFAULT 1.0,
+    PRIMARY KEY (concept_a, concept_b)
+);
+
+-- Lessons: bài học đã tổng hợp — có project namespace
+CREATE TABLE lessons (
+    id              SERIAL PRIMARY KEY,
+    concept_id      INT REFERENCES concepts(id),
+    project_name    VARCHAR(200) NOT NULL DEFAULT 'global',
+    lesson_name     VARCHAR(300),   -- = "{project_name} / {concept_name}"
+    content         TEXT NOT NULL,
+    synthesized_at  TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW(),
+    version         INT DEFAULT 1,
+    context_hashes  TEXT[]
+);
+
+-- Index tối ưu
+CREATE INDEX idx_concepts_status   ON concepts(status);
+CREATE INDEX idx_concepts_project  ON concepts(project_name);
+CREATE INDEX idx_concepts_keywords ON concepts USING GIN(keywords);
+CREATE INDEX idx_lessons_project   ON lessons(project_name);
+CREATE INDEX idx_marks_concept     ON concept_marks(concept_id);
+CREATE INDEX idx_edges_a           ON concept_edges(concept_a);
+CREATE INDEX idx_edges_b           ON concept_edges(concept_b);
+```
+
+#### Ví dụ lesson_name
+
+| project_name | concept_name | lesson_name |
+|---|---|---|
+| `toolcurrsorResetFreeTrial` | `Async/Await` | `toolcurrsorResetFreeTrial / Async-Await` |
+| `MyUnityGame` | `Repository Pattern` | `MyUnityGame / Repository-Pattern` |
+| `global` | `Clean Code` | `global / Clean-Code` |
+
+---
+
+### 2.3 Hệ thống điểm (Scoring Engine)
+
+```python
+# Bảng multiplier theo loại câu hỏi
+QUESTION_MULTIPLIER = {
+    "CONCEPT": 1.5,
+    "COMPARE": 1.2,
+    "HOWTO":   1.0,
+    "DEBUG":   0.8,
+    "CONFIRM": 0.6,
+}
+
+# Hệ số lan truyền graph
+RELATION_PROPAGATION = {
+    "DIRECT":   0.6,
+    "RELATED":  0.3,
+    "INDIRECT": 0.1,
+}
+
+def compute_novelty(concept) -> float:
+    if concept is None:
+        return 1.0  # Hoàn toàn mới
+    if concept.status == "LEARNED":
+        return 0.0  # Đã thành thạo, bỏ qua
+    return 0.3      # Đang học dở
+
+def compute_time_decay(concept) -> float:
+    if concept is None:
+        return 1.0
+    days = (now() - concept.first_seen).days
+    if days <= 7:
+        return 1.0
+    return exp(-0.1 * days)
+
+def compute_final_score(base_score, question_type, concept) -> float:
+    multiplier  = QUESTION_MULTIPLIER.get(question_type, 1.0)
+    novelty     = compute_novelty(concept)
+    time_decay  = compute_time_decay(concept)
+    return base_score * multiplier * novelty * time_decay
+```
+
+---
+
+### 2.4 Logic xử lý mark (`POST /api/mark`)
+
+```
+NHẬN payload
+      ↓
+Tìm concept trong DB theo name (+ keywords fuzzy match)
+      ↓
+┌─────────────────────────────────────────────────────────┐
+│ CASE 1: Concept chưa có                                 │
+│   → INSERT mới: status=GLIMPSED, keywords=payload.kw   │
+│   → novelty = 1.0                                       │
+├─────────────────────────────────────────────────────────┤
+│ CASE 2: Concept đã LEARNED                              │
+│   → Kiểm tra context_snippet có hash mới không?         │
+│   │   CÓ hash mới → gọi AI API /update-lesson (§2.7)   │
+│   └─  KHÔNG có gì mới → return {status: "skipped"}     │
+├─────────────────────────────────────────────────────────┤
+│ CASE 3: Concept đang LEARNING/CONSOLIDATING/GLIMPSED    │
+│   → novelty = 0.3                                       │
+└─────────────────────────────────────────────────────────┘
+      ↓
+Tính final_score
+INSERT concept_mark
+UPDATE concepts.accumulated_score += final_score
+UPDATE concepts.mark_count += 1, last_seen = now()
+UPDATE concepts.status theo ngưỡng (§2.5)
+      ↓
+Upsert concept_edges cho related_concepts trong payload
+      ↓
+Lan truyền điểm sang neighbors (§2.6)
+      ↓
+Kiểm tra ngưỡng READY:
+  Nếu status vừa chuyển sang READY → trigger tổng hợp (§2.8) async
+      ↓
+Query related lessons (LEARNED) theo edges
+RETURN response JSON
+```
+
+---
+
+### 2.5 Ngưỡng trạng thái
+
+| Điểm tích lũy | Status | Hành động |
+|---|---|---|
+| < 15 | `GLIMPSED` | Lưu keywords, chờ |
+| 15–40 | `LEARNING` | Theo dõi, update score |
+| 41–70 | `CONSOLIDATING` | Gần đủ điều kiện |
+| > 70 | `READY` | **Trigger tổng hợp bài học (async)** |
+| Đã tổng hợp | `LEARNED` | Không tăng điểm, chỉ update nếu có kiến thức mới |
+
+---
+
+### 2.6 Graph Propagation — Lan truyền điểm
+
+```python
+def propagate_scores(concept_id, final_score, related_concepts, db):
+    for rc in related_concepts:
+        neighbor = db.find_or_create(rc["name"])
+        
+        propagated = final_score * RELATION_PROPAGATION[rc["relation"]]
+        
+        if neighbor.status != "LEARNED":
+            db.update_score(neighbor.id, propagated)
+        
+        # Upsert edge
+        db.upsert_edge(concept_id, neighbor.id, rc["relation"])
+```
+
+---
+
+### 2.7 Cập nhật bài học đã LEARNED (Update Lesson)
+
+Khi concept đã `LEARNED` nhưng có context mới:
+
+```python
+def maybe_update_lesson(concept, context_snippet, ai_api_url):
+    lesson = db.get_lesson(concept.id)
+    
+    # Hash context để check duplicate
+    new_hash = sha256(context_snippet)
+    if new_hash in lesson.context_hashes:
+        return  # Đã biết, bỏ qua
+    
+    # Gọi AI API bổ sung
+    response = requests.post(f"{ai_api_url}/update-lesson", json={
+        "lesson_id":        lesson.id,
+        "existing_content": lesson.content,
+        "new_context":      context_snippet,
+    })
+    
+    # Append nội dung bổ sung vào lesson
+    db.append_lesson(
+        lesson_id = lesson.id,
+        addition  = response.json()["addition"],
+        new_hash  = new_hash
+    )
+```
+
+---
+
+### 2.8 Tự động tổng hợp bài học (Auto-Synthesize)
+
+Chạy **async background** khi concept đạt READY:
+
+```python
+def synthesize_lesson(concept_id, ai_api_url):
+    concept = db.get(concept_id)
+    marks   = db.get_marks(concept_id)
+
+    # lesson_name = "{project} / {concept}" (slug hóa concept)
+    lesson_name = f"{concept.project_name} / {slugify(concept.name)}"
+
+    response = requests.post(f"{ai_api_url}/synthesize", json={
+        "concept":       concept.name,
+        "project":       concept.project_name,
+        "keywords":      concept.keywords,
+        "domain":        concept.domain,
+        "marks_summary": [
+            {"question_type": m.question_type, "context": m.context_snippet}
+            for m in marks
+        ]
+    })
+
+    db.insert_lesson(
+        concept_id     = concept.id,
+        project_name   = concept.project_name,
+        lesson_name    = lesson_name,
+        content        = response.json()["lesson"],
+        context_hashes = [sha256(m.context_snippet) for m in marks]
+    )
+    db.update_status(concept.id, "LEARNED")
+```
+
+---
+
+### 2.9 Trả về Related Lessons (Reminder trigger)
+
+```python
+def get_related_lessons(concept_id, db) -> list:
+    # Lấy neighbors có status=LEARNED qua edges
+    neighbors = db.query("""
+        SELECT c.*, l.content, e.relation_type
+        FROM concept_edges e
+        JOIN concepts c   ON c.id = e.concept_b
+        JOIN lessons  l   ON l.concept_id = c.id
+        WHERE e.concept_a = :id
+          AND c.status    = 'LEARNED'
+        ORDER BY e.strength DESC
+        LIMIT 5
+    """, id=concept_id)
+    
+    return [
+        {
+            "concept":   n.name,
+            "lesson_id": n.lesson_id,
+            "relation":  n.relation_type,
+            "summary":   n.content[:150] + "..."
+        }
+        for n in neighbors
+    ]
+```
+
+---
+
+### 2.10 API Endpoints
+
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| `POST` | `/api/mark` | Nhận extraction từ Antigravity + trả về related lessons |
+| `POST` | `/api/search-lessons` | **Tra cứu bài học theo keywords** (Reminder API) |
+| `GET` | `/api/concepts` | Xem tất cả concepts + status |
+| `GET` | `/api/concepts/{id}` | Chi tiết concept + marks |
+| `GET` | `/api/lessons` | Danh sách bài học đã tổng hợp |
+| `GET` | `/api/lessons/{id}` | Nội dung bài học đầy đủ |
+| `POST` | `/api/synthesize/{id}` | Trigger tổng hợp thủ công |
+| `GET` | `/api/stats` | Thống kê tổng quan |
+
+---
+
+### 2.11 Logic `/api/search-lessons` (Reminder API)
+
+```python
+POST /api/search-lessons
+Body: { keywords: [...], question: str, limit: int }
+
+def search_lessons(keywords, question, limit, db):
+    # Bước 1: Tìm concepts có keywords trùng khớp
+    matched_concepts = db.query("""
+        SELECT id, name, status, keywords
+        FROM concepts
+        WHERE status = 'LEARNED'
+          AND keywords && :kw   -- PostgreSQL array overlap
+    """, kw=keywords)
+
+    # Bước 2: Lấy bài học của các concepts matched
+    results = []
+    for concept in matched_concepts:
+        lesson = db.get_lesson(concept.id)
+        if lesson:
+            # Tính relation dựa trên mức độ keyword overlap
+            overlap_count = len(set(concept.keywords) & set(keywords))
+            relation = "DIRECT" if overlap_count >= 2 else "RELATED"
+            results.append({
+                "concept":   concept.name,
+                "lesson_id": lesson.id,
+                "relation":  relation,
+                "summary":   lesson.content[:150] + "..."
+            })
+
+    # Bước 3: Sắp xếp theo mức độ liên quan, giới hạn limit
+    results.sort(key=lambda x: 0 if x["relation"]=="DIRECT" else 1)
+    return {
+        "found":   len(results) > 0,
+        "lessons": results[:limit]
+    }
+```
+
+---
+
+## PHẦN 3 — Cấu trúc thư mục dự án
+
+```
+hocai-server/
+├── main.py                 ← FastAPI app + routes
+├── database.py             ← SQLAlchemy setup
+├── models.py               ← ORM models (4 tables)
+├── scoring.py              ← Scoring engine + time decay
+├── graph.py                ← Graph propagation
+├── synthesizer.py          ← Gọi AI API tổng hợp + update
+├── schemas.py              ← Pydantic request/response models
+├── config.py               ← Cấu hình (db url, ai api url, port)
+└── requirements.txt
+```
+
+---
+
+## PHẦN 4 — Cấu hình cần thiết
+
+```env
+# config.env
+DATABASE_URL  = postgresql://user:pass@localhost:5432/hocai
+AI_API_URL    = http://your-server/ai
+HOCAI_PORT    = 8000
+SCORE_READY_THRESHOLD = 70
+MAX_CONCEPTS_PER_MARK = 3
+```
+
+---
+
+## PHẦN 5 — Checklist triển khai
+
+### Giai đoạn 1 — HOCAI Server cơ bản
+- [ ] Setup PostgreSQL + tạo 4 tables
+- [ ] FastAPI server + `POST /api/mark`
+- [ ] Scoring engine (base_score × multiplier × novelty × time_decay)
+- [ ] Graph propagation (upsert edges + lan truyền điểm)
+- [ ] Ngưỡng trạng thái (GLIMPSED → READY)
+- [ ] Response trả về `related_lessons`
+
+### Giai đoạn 2 — AI Integration
+- [ ] Background task trigger khi READY → gọi `/synthesize`
+- [ ] Lưu lesson vào DB, update status=LEARNED
+- [ ] Logic detect context mới cho LEARNED concepts
+- [ ] Gọi `/update-lesson` + append bài học
+
+### Giai đoạn 3 — Antigravity Side
+- [ ] Extraction logic (root concept + keywords + question_type)
+- [ ] Base score tự chấm theo bảng
+- [ ] POST `/api/search-lessons` khi nhận câu hỏi → lưu kết quả tạm
+- [ ] POST `/api/mark` sau khi hoàn thành câu trả lời
+- [ ] Gộp kết quả từ cả 2 API → dedup → hiển thị reminder cuối câu trả lời
+
+### Giai đoạn 4 — Polish
+- [ ] Remaining endpoints (GET concepts / lessons / stats)
+- [ ] POST `/api/synthesize/{id}` trigger thủ công
+- [ ] SQLite fallback nếu chưa có PostgreSQL
+- [ ] Startup script (tự chạy ngầm khi mở IDE)

@@ -1,0 +1,77 @@
+# HOCAI System v2.1 — Walkthrough
+
+## What Was Built
+
+A complete knowledge tracking system that runs **parallel to the IDE**, automatically capturing and synthesizing technical knowledge from AI conversations.
+
+### Architecture
+```
+Antigravity (IDE Agent) → HTTP POST → HOCAI Server (localhost:8000) → SQLite DB + AI API
+```
+
+---
+
+## Server Files Created
+
+| File | Purpose |
+|---|---|
+| [main.py](file:///d:/HOCAISYSTEM/hocai-server/main.py) | FastAPI app + 8 API routes |
+| [database.py](file:///d:/HOCAISYSTEM/hocai-server/database.py) | SQLite + SQLAlchemy (WAL mode) |
+| [models.py](file:///d:/HOCAISYSTEM/hocai-server/models.py) | 4 ORM tables (shared concepts) |
+| [schemas.py](file:///d:/HOCAISYSTEM/hocai-server/schemas.py) | Pydantic request/response |
+| [scoring.py](file:///d:/HOCAISYSTEM/hocai-server/scoring.py) | Score = base x multiplier x novelty x decay |
+| [graph.py](file:///d:/HOCAISYSTEM/hocai-server/graph.py) | Edge management + score propagation |
+| [synthesizer.py](file:///d:/HOCAISYSTEM/hocai-server/synthesizer.py) | AI lesson synthesis + quality-gated updates |
+| [config.py](file:///d:/HOCAISYSTEM/hocai-server/config.py) | Environment config |
+| [start_hocai.bat](file:///d:/HOCAISYSTEM/hocai-server/start_hocai.bat) | Manual startup script |
+
+### Skill Updated
+| File | Purpose |
+|---|---|
+| [SKILL.md](file:///C:/Users/Admin/.gemini/antigravity/skills/smart-knowledge-system/SKILL.md) | Agent auto-calls APIs after each answer |
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Status |
+|---|---|---|
+| `GET` | `/` | Tested OK |
+| `POST` | `/api/mark` | Tested OK — scored PWM at 12.75 |
+| `POST` | `/api/search-lessons` | Tested OK — returns found:false (no LEARNED yet) |
+| `GET` | `/api/concepts` | Tested OK — shows 3 concepts with scores |
+| `GET` | `/api/concepts/{id}` | Built |
+| `GET` | `/api/lessons` | Built |
+| `GET` | `/api/lessons/{id}` | Built |
+| `POST` | `/api/synthesize/{id}` | Built |
+| `GET` | `/api/stats` | Tested OK — 3 concepts, 1 mark, 0 lessons |
+
+## Test Results
+
+### POST /api/mark test
+- Input: PWM concept, CONCEPT type, base_score=8.5
+- Output: `score = 8.5 × 1.5 × 1.0 × 1.0 = 12.75` (GLIMPSED)
+- Graph propagation: Arduino GPIO = 7.65, Motor Control = 3.82
+
+### GET /api/stats
+```
+total_concepts: 3
+total_marks: 1
+total_lessons: 0
+concepts_by_status: {GLIMPSED: 3}
+```
+
+---
+
+## Key Design Decisions
+
+1. **SQLite** over PostgreSQL — ~50MB RAM vs ~300MB, no installation needed
+2. **Shared concepts** — `UNIQUE(name)`, project tracked in marks only
+3. **Quality-gated updates** — AI decides `should_update: true/false` before supplementing
+4. **Graceful degradation** — if server is down, agent works normally without errors
+
+## How to Use
+
+1. **Start server**: Run [d:\HOCAISYSTEM\hocai-server\start_hocai.bat](file:///d:/HOCAISYSTEM/hocai-server/start_hocai.bat)
+2. **Configure AI API**: Edit `.env` with your OpenAI-compatible API URL and key
+3. **Work normally** — the skill will automatically track knowledge in the background

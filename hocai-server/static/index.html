@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOCAI Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f0f13;
+            --bg-secondary: #1a1a24;
+            --bg-card: #22222e;
+            --bg-card-hover: #2a2a38;
+            --accent: #6c5ce7;
+            --accent-light: #a29bfe;
+            --accent-glow: rgba(108, 92, 231, 0.3);
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888a0;
+            --text-muted: #55556a;
+            --border: #2d2d3d;
+            --success: #00b894;
+            --warning: #fdcb6e;
+            --info: #74b9ff;
+            --danger: #ff7675;
+            --glimpsed: #636e72;
+            --learning: #74b9ff;
+            --consolidating: #fdcb6e;
+            --ready: #e17055;
+            --learned: #00b894;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-bottom: 1px solid var(--border);
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .status-pill {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            background: rgba(0, 184, 148, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(0, 184, 148, 0.3);
+        }
+
+        .status-pill.offline {
+            background: rgba(255, 118, 117, 0.15);
+            color: var(--danger);
+            border-color: rgba(255, 118, 117, 0.3);
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 24px 32px;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 4px 20px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 8px 0 4px;
+        }
+
+        .stat-detail {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 20px;
+            width: fit-content;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border: none;
+            background: none;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+
+        /* Content panels */
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        /* Table */
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: var(--bg-secondary);
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        tr:hover td {
+            background: var(--bg-card-hover);
+        }
+
+        /* Status badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-glimpsed {
+            background: rgba(99, 110, 114, 0.2);
+            color: var(--glimpsed);
+        }
+
+        .badge-learning {
+            background: rgba(116, 185, 255, 0.15);
+            color: var(--learning);
+        }
+
+        .badge-consolidating {
+            background: rgba(253, 203, 110, 0.15);
+            color: var(--consolidating);
+        }
+
+        .badge-ready {
+            background: rgba(225, 112, 85, 0.15);
+            color: var(--ready);
+        }
+
+        .badge-learned {
+            background: rgba(0, 184, 148, 0.15);
+            color: var(--learned);
+        }
+
+        /* Progress bar */
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 3px;
+            overflow: hidden;
+            width: 120px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        /* Score column */
+        .score {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Lesson card */
+        .lesson-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .lesson-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .lesson-card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .lesson-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .lesson-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .lesson-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .lesson-summary {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            font-size: 22px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-content {
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        /* Loading spinner */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            margin: 0 auto 12px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Chat Panel */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chat-msg {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background: var(--accent);
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg-ai {
+            align-self: flex-start;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-input-area {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            resize: none;
+            height: 48px;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .chat-send {
+            padding: 0 24px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chat-send:hover {
+            background: var(--accent-light);
+        }
+
+        .chat-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Settings Panel */
+        .settings-form {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 32px;
+            max-width: 600px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn-save {
+            padding: 12px 24px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-save:hover {
+            background: var(--accent-light);
+        }
+
+        .save-status {
+            margin-left: 12px;
+            font-size: 13px;
+            color: var(--success);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .container {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">H</div>
+            <div>
+                <h1>HOCAI Dashboard</h1>
+                <div class="header-subtitle">Knowledge Tracking System v2.1</div>
+            </div>
+        </div>
+        <div class="status-pill" id="serverStatus">Connecting...</div>
+    </div>
+
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-label">Concepts</div>
+                <div class="stat-value" id="statConcepts">-</div>
+                <div class="stat-detail" id="statConceptsDetail">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Marks</div>
+                <div class="stat-value" id="statMarks">-</div>
+                <div class="stat-detail">Total interactions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Lessons</div>
+                <div class="stat-value" id="statLessons">-</div>
+                <div class="stat-detail">Synthesized</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Ready</div>
+                <div class="stat-value" id="statReady">-</div>
+                <div class="stat-detail">Awaiting synthesis</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('concepts')">Concepts</button>
+            <button class="tab" onclick="switchTab('lessons')">Lessons</button>
+            <button class="tab" onclick="switchTab('chat')">Chat UI</button>
+            <button class="tab" onclick="switchTab('settings')">Settings</button>
+        </div>
+
+        <!-- Concepts Panel -->
+        <div class="panel active" id="panel-concepts">
+            <div class="loading" id="conceptsLoading">
+                <div class="spinner"></div>
+                Loading concepts...
+            </div>
+            <div class="table-container" id="conceptsTable" style="display:none">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Concept</th>
+                            <th>Domain</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Progress</th>
+                            <th>Marks</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conceptsBody"></tbody>
+                </table>
+            </div>
+            <div class="empty-state" id="conceptsEmpty" style="display:none">
+                <div class="empty-state-icon">---</div>
+                <h3>No concepts yet</h3>
+                <p>Start working with AI and concepts will appear here automatically.</p>
+            </div>
+        </div>
+
+        <!-- Lessons Panel -->
+        <div class="panel" id="panel-lessons">
+            <div class="loading" id="lessonsLoading">
+                <div class="spinner"></div>
+                Loading lessons...
+            </div>
+            <div class="lesson-list" id="lessonsList"></div>
+            <div class="empty-state" id="lessonsEmpty" style="display:none">
+                <div class="empty-state-icon">---</div>
+                <h3>No lessons yet</h3>
+                <p>When concepts reach 70+ score, lessons will be synthesized automatically.</p>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="panel" id="panel-chat">
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-msg msg-ai">Xin chào! Bạn muốn tìm hiểu về khái niệm kỹ thuật nào hôm nay?</div>
+                </div>
+                <div class="chat-input-area">
+                    <textarea class="chat-input" id="chatInput"
+                        placeholder="Nhập tin nhắn... (Enter để gửi, Shift+Enter để xuống dòng)"
+                        onkeydown="handleChatKey(event)"></textarea>
+                    <button class="chat-send" id="chatSendBtn" onclick="sendChatMessage()">Gửi</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="panel" id="panel-settings">
+            <div class="settings-form">
+                <div class="form-group">
+                    <label>AI API URL</label>
+                    <input type="text" class="form-control" id="settingApiUrl" placeholder="http://localhost:11434/v1">
+                </div>
+                <div class="form-group">
+                    <label>AI API KEY</label>
+                    <input type="password" class="form-control" id="settingApiKey" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                    <label>AI MODEL</label>
+                    <input type="text" class="form-control" id="settingModel" placeholder="gpt-3.5-turbo">
+                </div>
+                <div>
+                    <button class="btn-save" onclick="saveSettings()">Save Settings</button>
+                    <span class="save-status" id="saveStatus">Saved successfully!</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lesson Detail Modal -->
+    <div class="modal-overlay" id="lessonModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2 id="modalTitle">Lesson</h2>
+            <div class="modal-content" id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://127.0.0.1:8000';
+
+        // ---- Fetch helpers ----
+        async function apiFetch(endpoint) {
+            const res = await fetch(API + endpoint);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
+        // ---- Init ----
+        async function init() {
+            try {
+                await loadStats();
+                await loadConcepts();
+                document.getElementById('serverStatus').textContent = 'Online';
+                document.getElementById('serverStatus').className = 'status-pill';
+            } catch (e) {
+                document.getElementById('serverStatus').textContent = 'Offline';
+                document.getElementById('serverStatus').className = 'status-pill offline';
+            }
+        }
+
+        // ---- Stats ----
+        async function loadStats() {
+            const stats = await apiFetch('/api/stats');
+            document.getElementById('statConcepts').textContent = stats.total_concepts;
+            document.getElementById('statMarks').textContent = stats.total_marks;
+            document.getElementById('statLessons').textContent = stats.total_lessons;
+
+            const byStatus = stats.concepts_by_status || {};
+            const ready = (byStatus['READY'] || 0);
+            document.getElementById('statReady').textContent = ready;
+
+            const parts = Object.entries(byStatus).map(([k, v]) => `${k}: ${v}`).join(' | ');
+            document.getElementById('statConceptsDetail').textContent = parts || 'No data';
+        }
+
+        // ---- Concepts ----
+        async function loadConcepts() {
+            const concepts = await apiFetch('/api/concepts');
+            const loading = document.getElementById('conceptsLoading');
+            const table = document.getElementById('conceptsTable');
+            const empty = document.getElementById('conceptsEmpty');
+            const body = document.getElementById('conceptsBody');
+
+            loading.style.display = 'none';
+
+            if (concepts.length === 0) {
+                empty.style.display = 'block';
+                return;
+            }
+
+            table.style.display = 'block';
+            body.innerHTML = concepts.map(c => {
+                const progress = Math.min((c.accumulated_score / 70) * 100, 100);
+                const color = getStatusColor(c.status);
+                const lastSeen = c.last_seen ? timeAgo(c.last_seen) : '-';
+                return `<tr>
+                <td><strong>${esc(c.name)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${(c.keywords || []).join(', ')}</span></td>
+                <td style="color:var(--text-secondary)">${esc(c.domain || '-')}</td>
+                <td><span class="badge badge-${c.status.toLowerCase()}">${c.status}</span></td>
+                <td class="score" style="color:${color}">${c.accumulated_score.toFixed(1)}</td>
+                <td>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width:${progress}%;background:${color}"></div>
+                    </div>
+                </td>
+                <td style="color:var(--text-secondary)">${c.mark_count}</td>
+                <td style="color:var(--text-muted);font-size:12px">${lastSeen}</td>
+            </tr>`;
+            }).join('');
+        }
+
+        // ---- Lessons ----
+        async function loadLessons() {
+            const loading = document.getElementById('lessonsLoading');
+            const list = document.getElementById('lessonsList');
+            const empty = document.getElementById('lessonsEmpty');
+            loading.style.display = 'block';
+            list.innerHTML = '';
+            empty.style.display = 'none';
+
+            try {
+                const lessons = await apiFetch('/api/lessons');
+                loading.style.display = 'none';
+
+                if (lessons.length === 0) {
+                    empty.style.display = 'block';
+                    return;
+                }
+
+                list.innerHTML = lessons.map(l => `
+                <div class="lesson-card" onclick="openLesson(${l.id})">
+                    <div class="lesson-header">
+                        <div class="lesson-title">${esc(l.concept_name)}</div>
+                        <div class="lesson-meta">v${l.version}</div>
+                    </div>
+                    <div class="lesson-summary">${esc(l.summary)}</div>
+                </div>
+            `).join('');
+            } catch (e) {
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+            }
+        }
+
+        async function openLesson(id) {
+            try {
+                const lesson = await apiFetch(`/api/lessons/${id}`);
+                document.getElementById('modalTitle').textContent = lesson.concept_name;
+                document.getElementById('modalContent').textContent = lesson.content;
+                document.getElementById('lessonModal').classList.add('active');
+            } catch (e) {
+                console.error('Failed to load lesson', e);
+            }
+        }
+
+        function closeModal(event) {
+            if (event.target === document.getElementById('lessonModal')) {
+                document.getElementById('lessonModal').classList.remove('active');
+            }
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                document.getElementById('lessonModal').classList.remove('active');
+            }
+        });
+
+        // ---- Tabs ----
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('panel-' + name).classList.add('active');
+
+            if (name === 'lessons') loadLessons();
+            if (name === 'settings') loadSettings();
+        }
+
+        // ---- Settings ----
+        async function loadSettings() {
+            try {
+                const data = await apiFetch('/api/settings');
+                document.getElementById('settingApiUrl').value = data.api_url || '';
+                document.getElementById('settingApiKey').value = data.api_key || '';
+                document.getElementById('settingModel').value = data.model || '';
+            } catch (e) {
+                console.error('Failed to load settings', e);
+            }
+        }
+
+        async function saveSettings() {
+            const payload = {
+                api_url: document.getElementById('settingApiUrl').value,
+                api_key: document.getElementById('settingApiKey').value,
+                model: document.getElementById('settingModel').value,
+            };
+            try {
+                await fetch(API + '/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const status = document.getElementById('saveStatus');
+                status.style.opacity = '1';
+                setTimeout(() => status.style.opacity = '0', 2000);
+            } catch (e) {
+                alert('Failed to save settings: ' + e.message);
+            }
+        }
+
+        // ---- Chat ----
+        let chatHistory = [];
+
+        function handleChatKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            // User message
+            appendChatMessage('user', text);
+            chatHistory.push({ role: 'user', content: text });
+            input.value = '';
+            input.disabled = true;
+            document.getElementById('chatSendBtn').disabled = true;
+
+            // Loading indicator
+            const loadingId = 'loading-' + Date.now();
+            appendChatMessage('ai', '...', loadingId);
+
+            try {
+                const res = await fetch(API + '/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: chatHistory })
+                });
+
+                if (!res.ok) throw new Error('API error: ' + res.status);
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let fullReply = "";
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop(); // Giữ lại phần dòng chưa hoàn chỉnh
+
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith("data: ")) {
+                            const dataPayload = trimmedLine.slice(6).trim();
+                            if (dataPayload === "[DONE]") continue;
+                            try {
+                                const data = JSON.parse(dataPayload);
+                                if (data.choices && data.choices.length > 0 && data.choices[0].delta && data.choices[0].delta.content) {
+                                    fullReply += data.choices[0].delta.content;
+                                    const loadingMsg = document.getElementById(loadingId);
+                                    if (loadingMsg) {
+                                        loadingMsg.innerHTML = esc(fullReply).replace(/\n/g, '<br>');
+                                    }
+                                } else if (data.error) {
+                                    throw new Error(data.error);
+                                }
+                            } catch (e) {
+                                // sometimes fragmented JSON or other issues, safely ignore
+                            }
+                        }
+                    }
+                }
+
+                chatHistory.push({ role: 'assistant', content: fullReply });
+                if (!document.getElementById(loadingId)) {
+                    appendChatMessage('ai', fullReply);
+                }
+
+            } catch (e) {
+                const loadingMsg = document.getElementById(loadingId);
+                if (loadingMsg) {
+                    loadingMsg.style.color = 'var(--danger)';
+                    loadingMsg.textContent = 'Error: ' + e.message;
+                } else {
+                    appendChatMessage('ai', 'Error: ' + e.message);
+                }
+                // Remove the failed user message from history
+                chatHistory.pop();
+            } finally {
+                input.disabled = false;
+                document.getElementById('chatSendBtn').disabled = false;
+                input.focus();
+            }
+        }
+
+        function appendChatMessage(role, text, id = '') {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `chat-msg msg-${role}`;
+            if (id) div.id = id;
+            div.innerHTML = esc(text).replace(/\n/g, '<br>');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ---- Helpers ----
+        function getStatusColor(status) {
+            const map = {
+                GLIMPSED: 'var(--glimpsed)', LEARNING: 'var(--learning)',
+                CONSOLIDATING: 'var(--consolidating)', READY: 'var(--ready)',
+                LEARNED: 'var(--learned)',
+            };
+            return map[status] || 'var(--text-secondary)';
+        }
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s || '';
+            return d.innerHTML;
+        }
+
+        function timeAgo(iso) {
+            const d = new Date(iso);
+            const now = new Date();
+            const diff = Math.floor((now - d) / 1000);
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
+        }
+
+        // Auto-refresh every 30s
+        init();
+        setInterval(() => {
+            loadStats().catch(() => { });
+            const activePanel = document.querySelector('.panel.active');
+            if (activePanel && activePanel.id === 'panel-concepts') {
+                loadConcepts().catch(() => { });
+            }
+        }, 30000);
+    </script>
+</body>
+
+</html>
