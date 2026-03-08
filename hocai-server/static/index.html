@@ -677,7 +677,7 @@
             <div class="empty-state" id="lessonsEmpty" style="display:none">
                 <div class="empty-state-icon">---</div>
                 <h3>No lessons yet</h3>
-                <p>When concepts reach 70+ score, lessons will be synthesized automatically.</p>
+                <p>When concepts reach 30+ score, lessons will be synthesized automatically.</p>
             </div>
         </div>
 
@@ -791,7 +791,7 @@
 
             table.style.display = 'block';
             body.innerHTML = concepts.map(c => {
-                const progress = Math.min((c.accumulated_score / 70) * 100, 100);
+                const progress = Math.min((c.accumulated_score / 30) * 100, 100);
                 const color = getStatusColor(c.status);
                 const lastSeen = c.last_seen ? timeAgo(c.last_seen) : '-';
                 return `<tr>
