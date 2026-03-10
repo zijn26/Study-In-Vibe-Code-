@@ -34,7 +34,7 @@ from graph import (
     get_related_lessons,
     upsert_edge,
 )
-from synthesizer import sha256_hash, synthesize_lesson, maybe_update_lesson, call_ai_api
+from synthesizer import sha256_hash, synthesize_lesson, maybe_update_lesson, call_ai_api, synthesis_progress
 from config import HOCAI_PORT, HOCAI_HOST, MAX_RELATED_LESSONS
 from mcp_service import get_mcp_tools, execute_mcp_tool
 
@@ -342,6 +342,28 @@ async def get_concept(concept_id: int, db: Session = Depends(get_db)):
     )
 
 
+# ─── DELETE /api/concepts/{id} ───
+
+@app.delete("/api/concepts/{concept_id}")
+async def delete_concept(concept_id: int, db: Session = Depends(get_db)):
+    """Delete a concept and all its associated marks, edges, and lessons."""
+    concept = db.query(Concept).filter(Concept.id == concept_id).first()
+    if not concept:
+        raise HTTPException(status_code=404, detail="Concept not found")
+    
+    # Explicitly delete dependent records to avoid SQLite FK constraints
+    # if the DB schema wasn't migrated with ON DELETE CASCADE
+    db.query(ConceptMark).filter(ConceptMark.concept_id == concept_id).delete()
+    db.query(ConceptEdge).filter(
+        (ConceptEdge.concept_a == concept_id) | (ConceptEdge.concept_b == concept_id)
+    ).delete()
+    db.query(Lesson).filter(Lesson.concept_id == concept_id).delete()
+    
+    db.delete(concept)
+    db.commit()
+    return {"status": "success", "message": f"Deleted concept '{concept.name}'"}
+
+
 # ─── GET /api/lessons ───
 
 @app.get("/api/lessons", response_model=list[LessonListResponse])
@@ -388,6 +410,31 @@ async def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
     )
 
 
+# ─── POST /api/lessons/{id}/resynthesize ───
+
+@app.post("/api/lessons/{lesson_id}/resynthesize")
+async def resynthesize_lesson(
+    lesson_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Force re-synthesis of an existing lesson."""
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    concept = db.query(Concept).filter(Concept.id == lesson.concept_id).first()
+    if not concept:
+        raise HTTPException(status_code=404, detail="Concept not found")
+
+    concept.status = "READY"
+    db.delete(lesson)
+    db.commit()
+
+    background_tasks.add_task(_run_synthesize, concept.id)
+    return {"status": "triggered", "message": f"Re-synthesis started for '{concept.name}'"}
+
+
 # ─── POST /api/synthesize/{id} ───
 
 @app.post("/api/synthesize/{concept_id}")
@@ -406,6 +453,14 @@ async def trigger_synthesize(
 
     background_tasks.add_task(_run_synthesize, concept.id)
     return {"status": "triggered", "message": f"Synthesis started for '{concept.name}'"}
+
+
+# ─── GET /api/progress ───
+
+@app.get("/api/progress")
+async def get_progress():
+    """Return current ongoing synthesis global progress state."""
+    return synthesis_progress
 
 
 # ─── GET /api/stats ───

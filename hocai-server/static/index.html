@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HOCAI Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
             --bg-primary: #0f0f13;
@@ -78,6 +82,7 @@
             font-weight: 600;
             background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -298,8 +303,20 @@
         }
 
         .lesson-card:hover {
+            transform: translateY(-2px);
             border-color: var(--accent);
-            box-shadow: 0 4px 20px var(--accent-glow);
+            box-shadow: 0 4px 12px rgba(108, 92, 231, 0.15);
+        }
+
+        .progress-card {
+            background: linear-gradient(145deg, rgba(30, 30, 36, 0.9), rgba(40, 40, 48, 0.9));
+            border-color: var(--warning);
+            cursor: default;
+        }
+
+        .progress-card:hover {
+            transform: none;
+            box-shadow: none;
         }
 
         .lesson-header {
@@ -325,67 +342,184 @@
             line-height: 1.6;
         }
 
-        /* Modal */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            backdrop-filter: blur(4px);
-            justify-content: center;
-            align-items: center;
+        /* Lesson Content */
+
+        .lesson-content {
+            font-size: 15px;
+            line-height: 1.75;
+            color: var(--text-primary);
         }
 
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 32px;
-            max-width: 800px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .modal h2 {
-            font-size: 22px;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .modal-content {
-            font-size: 14px;
-            line-height: 1.8;
-            color: var(--text-secondary);
-            white-space: pre-wrap;
-        }
-
-        .modal-close {
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-close:hover {
-            background: var(--danger);
+        .lesson-content h1,
+        .lesson-content h2,
+        .lesson-content h3,
+        .lesson-content h4 {
             color: #fff;
+            margin-top: 32px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .lesson-content h1 {
+            font-size: 26px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .lesson-content h2 {
+            font-size: 22px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .lesson-content h3 {
+            font-size: 18px;
+            color: var(--accent-light);
+        }
+
+        .lesson-content h4 {
+            font-size: 16px;
+        }
+
+        .lesson-content p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .lesson-content strong {
+            color: #fff;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .lesson-content em {
+            color: var(--warning);
+            font-style: normal;
+        }
+
+        .lesson-content ul,
+        .lesson-content ol {
+            margin-bottom: 20px;
+            padding-left: 24px;
+            color: var(--text-secondary);
+        }
+
+        .lesson-content li {
+            margin-bottom: 8px;
+        }
+
+        .lesson-content li>p {
+            margin-bottom: 8px;
+        }
+
+        .lesson-content blockquote {
+            border-left: 4px solid var(--accent);
+            background: rgba(108, 92, 231, 0.05);
+            padding: 16px 20px;
+            margin: 0 0 20px 0;
+            color: var(--text-muted);
+            border-radius: 0 10px 10px 0;
+            font-style: italic;
+        }
+
+        .lesson-content blockquote p:last-child {
+            margin-bottom: 0;
+        }
+
+        .lesson-content pre {
+            background: #1e1e24;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .lesson-content code {
+            font-family: 'Fira Code', Consolas, Monaco, monospace;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 3px 6px;
+            border-radius: 6px;
+            font-size: 13.5px;
+            color: var(--info);
+        }
+
+        .lesson-content pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .lesson-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .lesson-content th,
+        .lesson-content td {
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            text-align: left;
+        }
+
+        .lesson-content th {
+            background-color: var(--bg-secondary);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .lesson-content tr:nth-child(even) td {
+            background-color: rgba(255, 255, 255, 0.015);
+        }
+
+        .lesson-content a {
+            color: var(--accent-light);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--accent-light);
+        }
+
+        .lesson-content hr {
+            border: 0;
+            height: 1px;
+            background: var(--border);
+            margin: 32px 0;
+        }
+
+        .lesson-content img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 16px 0;
+            border: 1px solid var(--border);
+        }
+
+        /* Scrollbars */
+                .lesson-content pre::-webkit-scrollbar,
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+                .lesson-content pre::-webkit-scrollbar-track,
+        .chat-messages::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+
+                .lesson-content pre::-webkit-scrollbar-thumb,
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+                .lesson-content pre::-webkit-scrollbar-thumb:hover,
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
         }
 
         /* Empty state */
@@ -655,6 +789,7 @@
                             <th>Progress</th>
                             <th>Marks</th>
                             <th>Last Seen</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="conceptsBody"></tbody>
@@ -673,6 +808,7 @@
                 <div class="spinner"></div>
                 Loading lessons...
             </div>
+            <div class="lesson-list" id="progressList"></div>
             <div class="lesson-list" id="lessonsList"></div>
             <div class="empty-state" id="lessonsEmpty" style="display:none">
                 <div class="empty-state-icon">---</div>
@@ -726,14 +862,32 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Lesson Detail Modal -->
-    <div class="modal-overlay" id="lessonModal" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()">
-            <h2 id="modalTitle">Lesson</h2>
-            <div class="modal-content" id="modalContent"></div>
+        <!-- Lesson Detail Panel -->
+        <div class="panel" id="panel-lesson-detail" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <button onclick="switchTab('lessons')" style="background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary); padding: 8px 16px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; transition: all 0.2s;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='var(--bg-secondary)'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Back to Lessons
+                </button>
+                <h2 id="lessonDetailTitle" style="margin: 0; font-size: 24px; font-weight: 600;">Lesson</h2>
+            </div>
+            <button id="btnResynthesize" style="background: var(--warning); color: #1e1e24; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" />
+                </svg>
+                Re-synthesize
+            </button>
         </div>
+        
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); overflow-y: auto; max-height: calc(100vh - 200px);">
+            <div class="lesson-content" id="lessonDetailContent" style="max-width: 800px; margin: 0 auto; color: var(--text-primary);"></div>
+        </div>
+    </div>
     </div>
 
     <script>
@@ -794,6 +948,13 @@
                 const progress = Math.min((c.accumulated_score / 30) * 100, 100);
                 const color = getStatusColor(c.status);
                 const lastSeen = c.last_seen ? timeAgo(c.last_seen) : '-';
+                
+                let actions = `<button onclick="deleteConcept(${c.id})" style="background: rgba(255, 71, 87, 0.15); color: var(--danger); border: 1px solid rgba(255, 71, 87, 0.3); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s;">Xóa</button>`;
+                
+                if (c.status === 'READY') {
+                    actions = `<button onclick="synthesizeConcept(${c.id})" style="background: rgba(46, 204, 113, 0.15); color: var(--success); border: 1px solid rgba(46, 204, 113, 0.3); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s; margin-right: 8px;">Tổng hợp</button>` + actions;
+                }
+
                 return `<tr>
                 <td><strong>${esc(c.name)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${(c.keywords || []).join(', ')}</span></td>
                 <td style="color:var(--text-secondary)">${esc(c.domain || '-')}</td>
@@ -806,8 +967,75 @@
                 </td>
                 <td style="color:var(--text-secondary)">${c.mark_count}</td>
                 <td style="color:var(--text-muted);font-size:12px">${lastSeen}</td>
+                <td style="white-space: nowrap;">
+                    ${actions}
+                </td>
             </tr>`;
             }).join('');
+        }
+
+        async function synthesizeConcept(id) {
+            try {
+                const res = await fetch(`${API}/api/synthesize/${id}`, { method: 'POST' });
+                if (!res.ok) throw new Error('Yêu cầu tổng hợp thất bại');
+                alert('Đã gửi yêu cầu tổng hợp bài học!');
+                await loadStats();
+                await loadConcepts();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        async function deleteConcept(id) {
+            if (!confirm('Bạn có chắc chắn muốn xóa Concept này cùng toàn bộ Marks và Lesson?')) return;
+            try {
+                const res = await fetch(`${API}/api/concepts/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Xóa thất bại');
+                await loadStats();
+                await loadConcepts();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        // ---- Progress Polling ----
+        let progressInterval = null;
+
+        async function pollProgress() {
+            try {
+                const progressData = await apiFetch('/api/progress');
+                const pList = document.getElementById('progressList');
+
+                // Active generating concepts
+                const active = Object.values(progressData).filter(p => p.status === 'synthesizing');
+
+                if (active.length > 0) {
+                    pList.innerHTML = active.map(p => {
+                        const pct = p.total_chunks > 0 ? (p.current_chunk / p.total_chunks) * 100 : 0;
+                        return `
+                        <div class="lesson-card progress-card">
+                            <div class="lesson-header" style="margin-bottom: 12px;">
+                                <div class="lesson-title" style="color: var(--warning)">
+                                    <span class="spinner" style="width: 14px; height: 14px; border-width: 2px; display: inline-block; margin-right: 8px; margin-bottom: -2px;"></span>
+                                    Đang tổng hợp: ${esc(p.name)}
+                                </div>
+                                <div class="lesson-meta">${p.current_chunk}/${p.total_chunks} chunks</div>
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
+                                ${esc(p.message)}
+                            </div>
+                            <div class="progress-bar" style="height: 6px;">
+                                <div class="progress-fill" style="width:${pct}%; background: var(--warning); transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('');
+                } else {
+                    pList.innerHTML = '';
+                }
+            } catch (e) {
+                // Ignore silent poll errors
+            }
         }
 
         // ---- Lessons ----
@@ -846,34 +1074,88 @@
         async function openLesson(id) {
             try {
                 const lesson = await apiFetch(`/api/lessons/${id}`);
-                document.getElementById('modalTitle').textContent = lesson.concept_name;
-                document.getElementById('modalContent').textContent = lesson.content;
-                document.getElementById('lessonModal').classList.add('active');
+                document.getElementById('lessonDetailTitle').textContent = lesson.concept_name;
+
+                const btnResyn = document.getElementById('btnResynthesize');
+                btnResyn.onclick = () => resynthesizeLesson(lesson.id);
+
+                if (window.marked && window.hljs) {
+                    marked.setOptions({
+                        highlight: function (code, lang) {
+                            const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                            return hljs.highlight(code, { language }).value;
+                        }
+                    });
+                    document.getElementById('lessonDetailContent').innerHTML = marked.parse(lesson.content);
+                } else {
+                    document.getElementById('lessonDetailContent').textContent = lesson.content;
+                }
+
+                // Show panel-lesson-detail
+                document.getElementById('statsGrid').style.display = 'none';
+                document.querySelector('.tabs').style.display = 'none';
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => {
+                    p.classList.remove('active');
+                    p.style.display = ''; // reset inline style
+                });
+                const detailPanel = document.getElementById('panel-lesson-detail');
+                detailPanel.classList.add('active');
+                detailPanel.style.display = 'block';
+
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
             } catch (e) {
                 console.error('Failed to load lesson', e);
             }
         }
 
-        function closeModal(event) {
-            if (event.target === document.getElementById('lessonModal')) {
-                document.getElementById('lessonModal').classList.remove('active');
+        async function resynthesizeLesson(id) {
+            if (!confirm('Xóa bài học hiện tại và yêu cầu AI biên soạn lại từ đầu với ngữ cảnh mới nhất?')) return;
+            try {
+                const res = await fetch(`${API}/api/lessons/${id}/resynthesize`, { method: 'POST' });
+                if (!res.ok) throw new Error('Lỗi khi yêu cầu tổng hợp lại');
+
+                const data = await res.json();
+                alert(data.message || 'Đã gửi yêu cầu tổng hợp lại. Vui lòng tải lại trang sau 1-2 phút.');
+                
+                switchTab('lessons');
+                await loadStats();
+                await loadConcepts(); // Status changes back to READY
+            } catch (e) {
+                alert(e.message);
             }
         }
 
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape') {
-                document.getElementById('lessonModal').classList.remove('active');
-            }
-        });
-
         // ---- Tabs ----
         function switchTab(name) {
+            document.getElementById('statsGrid').style.display = 'grid';
+            document.querySelector('.tabs').style.display = 'flex';
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            event.target.classList.add('active');
+            document.querySelectorAll('.panel').forEach(p => {
+                p.classList.remove('active');
+                p.style.display = ''; // reset inline style
+            });
+            document.getElementById('panel-lesson-detail').style.display = 'none';
+
+            // Find the correct tab and make active
+            const tabBtn = document.querySelector(`.tab[onclick="switchTab('${name}')"]`);
+            if (tabBtn) tabBtn.classList.add('active');
+            
             document.getElementById('panel-' + name).classList.add('active');
 
-            if (name === 'lessons') loadLessons();
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+
+            if (name === 'lessons') {
+                loadLessons();
+                pollProgress();
+                progressInterval = setInterval(pollProgress, 2000);
+            }
             if (name === 'settings') loadSettings();
         }
 

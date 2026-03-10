@@ -21,17 +21,19 @@ if errorlevel 1 (
 )
 
 REM --- Setup venv on first run ---
-if not exist "venv" (
+if not exist "venv\Scripts\activate.bat" (
     echo   [SETUP] First run - creating virtual environment...
     python -m venv venv
+    echo   [SETUP] Activating and installing dependencies...
     call venv\Scripts\activate.bat
-    echo   [SETUP] Installing dependencies...
     pip install -r requirements.txt --quiet
     echo   [SETUP] Done!
     echo.
-) else (
-    call venv\Scripts\activate.bat
 )
+
+REM --- Always activate venv ---
+echo   [INFO] Activating virtual environment...
+call venv\Scripts\activate.bat
 
 REM --- Check .env ---
 if not exist ".env" (
@@ -60,7 +62,5 @@ echo   Press Ctrl+C to stop the server
 echo   =========================================
 echo.
 
-REM --- To open dashboard manually: http://localhost:8000 ---
-
-REM --- Start server (foreground so Ctrl+C works) ---
-python main.py
+REM --- Start server using venv python explicitly ---
+"venv\Scripts\python.exe" main.py

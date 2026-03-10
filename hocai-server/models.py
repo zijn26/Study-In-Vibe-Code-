@@ -32,7 +32,7 @@ class Concept(Base):
 
     # Relationships
     marks = relationship("ConceptMark", back_populates="concept", cascade="all, delete-orphan")
-    lesson = relationship("Lesson", back_populates="concept", uselist=False)
+    lesson = relationship("Lesson", back_populates="concept", cascade="all, delete-orphan", uselist=False)
 
     @property
     def keywords(self):
@@ -80,8 +80,8 @@ Index("idx_marks_project", ConceptMark.project_name)
 class ConceptEdge(Base):
     __tablename__ = "concept_edges"
 
-    concept_a = Column(Integer, ForeignKey("concepts.id"), primary_key=True)
-    concept_b = Column(Integer, ForeignKey("concepts.id"), primary_key=True)
+    concept_a = Column(Integer, ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True)
+    concept_b = Column(Integer, ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True)
     relation_type = Column(String(20))
     strength = Column(Float, default=1.0)
 
@@ -97,7 +97,7 @@ class Lesson(Base):
     __tablename__ = "lessons"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    concept_id = Column(Integer, ForeignKey("concepts.id"), unique=True)  # 1 concept = 1 lesson
+    concept_id = Column(Integer, ForeignKey("concepts.id", ondelete="CASCADE"), unique=True)  # 1 concept = 1 lesson
     lesson_name = Column(String(300))
     content = Column(Text, nullable=False)
     synthesized_at = Column(DateTime, default=utcnow)
